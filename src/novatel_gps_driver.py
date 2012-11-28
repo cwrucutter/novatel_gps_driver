@@ -135,13 +135,14 @@ class NovatelParser:
         navMsg.position_covariance_type = NavSatFix.COVARIANCE_TYPE_UNKNOWN
 
         # Populate the Status 
+        #TODO: Send a string that represents the status
         navData.status.service = NavSatStatus.SERVICE_GPS
-        if solStat == 0:
-            navMsg.status.status = NavSatStatus.STATUS_NO_FIX
-        elif solStat == 50:
-            navMsg.status.status = NavSatStatus.STATUS_FIX
-        elif solStat == 18:
+        if solStat == 0 && posType == 50:   # NARROW_INT
+            navMsg.status.status = NavSatStatus.STATUS_FIX 
+        elif solStat == 0 && posType == 18: # WAAS
             navMsg.status.status = NavSatStatus.STATUS_SBAS_FIX
+        else: # catch the rest of the states
+            navMsg.status.status = NavSatStatus.STATUS_NO_FIX
 
         return True
 
