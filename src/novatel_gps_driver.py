@@ -39,6 +39,7 @@ from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
 from sensor_msgs.msg import TimeReference
 from geometry_msgs.msg import TwistStamped
+from gps_common.msg import GPSStatus
 
 import serial, string, math, time, calendar, struct
 
@@ -113,37 +114,49 @@ class NovatelParser:
         """ Populate timeMsg from the header info
             timeMsg: ROS message TimeReference
         """
-        timeMsg.time_ref = 0;
+        timeMsg.time_ref = 0; #TODO: Populate the TimeReference message appropriately
         return True
     
-    def ParseBestPos(self, data, navMsg):
+    def ParseBestPos(self, data, navMsg, gpsStatus):
         """ Parse a BestPos message, populate navMsg
             data: string
             navMsg: ROS message NavSatFix
+            gpsStatus: ROS message GPS Status (gps_common/GPSStatus), holds more information than usual
         """
         bestPos = struct.unpack('<lldddflffffffBBBBBBBB',msg)
         solStat, posType, lat    , lon   , hgt    , und   , datum , \
         latStd , lonStd , hgtStd , stdId , diffAge, solAge, SVs   , \
         slnSVs , obs    , mult   , rsv1  , extStat, rsv2  , sigMsk  = bestPos
-        rospy.loginfo(bestPos)
+        #rospy.loginfo(bestPos)
 
         # Populate the NavSatFix message
         navMsg.latitude  = lat
         navMsg.longitude = lon
         navMsg.altitude  = hgt
-        #TODO: Replace the covariance
-        navMsg.position_covariance_type = NavSatFix.COVARIANCE_TYPE_UNKNOWN
+        #TODO: Verify covariance 
+        navMsg.position_covariance_type = NavSatFix.COVARIANCE_TYPE_DIAGONAL_KNOWN
+        navMsg.position_covariance[0] = latStd
+        navMsg.position_covariance[4] = lonStd
+        navMsg.position_covariance[8] = hgtStd
 
         # Populate the Status 
         #TODO: Send a string that represents the status
         navData.status.service = NavSatStatus.SERVICE_GPS
-        if solStat == 0 && posType == 50:   # NARROW_INT
+        if solStat == 0 and posType == 50:   # NARROW_INT
             navMsg.status.status = NavSatStatus.STATUS_FIX 
-        elif solStat == 0 && posType == 18: # WAAS
+        elif solStat == 0 and posType == 18: # WAAS
             navMsg.status.status = NavSatStatus.STATUS_SBAS_FIX
         else: # catch the rest of the states
             navMsg.status.status = NavSatStatus.STATUS_NO_FIX
-
+            
+        # Populate the GPSStatus message
+        #  --> Since I dont have enough data to populate every 
+        #      element, I'll just do the satellite numbers and status
+        gpsStatus.satellites_used = slnSVs
+        gpsStatus.satellites_visible = SVs
+        gpsStatus.status = solStat
+        gpsStatus.position_source = posType
+        
         return True
 
     def ParseBestVel(self, data, velMsg):
@@ -153,7 +166,7 @@ class NovatelParser:
         """
         bestVel = struct.unpack('<llffdddf',msg)
         solStat, velType, lat, age, horSpd, trkAngle, vertSpeed, rsv1 = bestVel
-        rospy.loginfo(bestVel)
+        #rospy.loginfo(bestVel)
         #print bestVel
 
         #TODO: Change the velocity representation if we're going to use it... I dont think this is what we want
@@ -170,8 +183,9 @@ if __name__ == "__main__":
     #ROS init
     rospy.init_node('novatel_gps_driver')
     gpsPub = rospy.Publisher('gps_fix', NavSatFix)
+    gpsStatPub = rospy.Publisher('gps_status', GPSStatus)
     gpsVelPub = rospy.Publisher('gps_vel',TwistStamped)
-    gpsTimePub = rospy.Publisher('time_reference', TimeReference)
+    #gpsTimePub = rospy.Publisher('time_reference', TimeReference)
     #Init GPS port
     GPSport = rospy.get_param('~port','/dev/ttyUSB0')
     GPSrate = rospy.get_param('~baud',57600)
@@ -183,6 +197,7 @@ if __name__ == "__main__":
     navData = NavSatFix()
     gpsVel = TwistStamped()
     gpstime = TimeReference()
+    gpsStatus = GPSStatus()
     gpstime.source = time_ref_source
     navData.header.frame_id = frame_id
     gpsVel.header.frame_id = frame_id
@@ -202,8 +217,6 @@ if __name__ == "__main__":
             match = '\xAA\x44\x12'
             if sync != match:
                 continue
-            else:
-                rospy.loginfo("Beginning new message")
 
             # READ HEADER
             header      = GPS.read(25)
@@ -229,12 +242,14 @@ if __name__ == "__main__":
             if parser.hdr_msgID == parser.BESTPOS:
                 #BESTPOS message
                 navData.header.stamp = timeNow
-                parser.ParseBestPos(msg,navData)
+                gpsStatus.header.stamp = timeNow
+                parser.ParseBestPos(msg, navData, gpsStatus)
                 parser.ParseTimeRef(gpstime)
             
                 # Publish navData and time reference
                 gpsPub.publish(navData)
-                gpsTimePub.publish(gpstime)
+                gpsStatPub.publish(gpsStatus)
+                #gpsTimePub.publish(gpstime) #eh, dont publish time reference for now
 
             elif parser.hdr_msgID == 99:
                 #BESTVEL message
