@@ -32,8 +32,6 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import roslib
-roslib.load_manifest('novatel_gps_driver')
 import rospy
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
@@ -182,9 +180,9 @@ class NovatelParser:
 if __name__ == "__main__":
     #ROS init
     rospy.init_node('novatel_gps_driver')
-    gpsPub = rospy.Publisher('gps_fix', NavSatFix)
-    gpsStatPub = rospy.Publisher('gps_status', GPSStatus)
-    gpsVelPub = rospy.Publisher('gps_vel',TwistStamped)
+    gpsPub = rospy.Publisher('gps_fix', NavSatFix, queue_size=1)
+    gpsStatPub = rospy.Publisher('gps_status', GPSStatus, queue_size=1)
+    gpsVelPub = rospy.Publisher('gps_vel',TwistStamped, queue_size=1)
     #gpsTimePub = rospy.Publisher('time_reference', TimeReference)
     #Init GPS port
     GPSport = rospy.get_param('~port','/dev/ttyUSB0')
