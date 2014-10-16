@@ -3,11 +3,8 @@ novatel_gps_driver
 
 CWRUCutter's Novatel GPS driver. Uses output from Novatel's propak 3 to publishes the following messages:
 
-Position estimate
-type `/sensor_msgs/NavSatFix` to `/gps_fix`
+Position estimate - message type `/sensor_msgs/NavSatFix` topic `/gps_fix`
 
-Velocity estimate
-type `/geometry_msgs/TwistStamped` to `/gps_vel`
+Velocity estimate - message type `/geometry_msgs/TwistStamped` topic `/gps_vel`
 
-GPS status
-type `/sensor_msgs/GPSStatus` to `/gps_status`
+GPS status - message type `/sensor_msgs/GPSStatus` topic `/gps_status`
