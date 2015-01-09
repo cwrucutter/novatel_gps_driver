@@ -32,8 +32,6 @@
 # ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import roslib
-roslib.load_manifest('novatel_gps_driver')
 import rospy
 from sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import NavSatStatus
@@ -182,11 +180,11 @@ class NovatelParser:
 if __name__ == "__main__":
     #ROS init
     rospy.init_node('novatel_gps_driver')
-    gpsPub = rospy.Publisher('gps_fix', NavSatFix)
-    gpsStatPub = rospy.Publisher('gps_status', GPSStatus)
-    gpsVelPub = rospy.Publisher('gps_vel',TwistStamped)
+    gpsPub = rospy.Publisher('gps_fix', NavSatFix, queue_size=1)
+    gpsStatPub = rospy.Publisher('gps_status', GPSStatus, queue_size=1)
+    gpsVelPub = rospy.Publisher('gps_vel',TwistStamped, queue_size=1)
     #gpsTimePub = rospy.Publisher('time_reference', TimeReference)
-    #Init GPS port
+    #Init gpsSerial port
     GPSport = rospy.get_param('~port','/dev/ttyUSB0')
     GPSrate = rospy.get_param('~baud',57600)
     frame_id = rospy.get_param('~frame_id','gps')
@@ -206,12 +204,12 @@ if __name__ == "__main__":
     parser = NovatelParser()
     
     try:
-        GPS = serial.Serial(port=GPSport,baudrate=GPSrate,timeout=.01)
-        #Read in GPS data
+        gpsSerial = serial.Serial(port=GPSport,baudrate=GPSrate,timeout=.01)
+        #Read in gpsSerial data
         sync0 = '\x00'; sync1 = '\x00'; sync2 = '\x00';
         while not rospy.is_shutdown():
             # READ UNTIL SYNC
-            data  = GPS.read(1)
+            data  = gpsSerial.read(1)
             sync2 = sync1; sync1 = sync0; sync0 = data;
             sync  = sync2+sync1+sync0;
             match = '\xAA\x44\x12'
@@ -219,19 +217,19 @@ if __name__ == "__main__":
                 continue
 
             # READ HEADER
-            header      = GPS.read(25)
+            header      = gpsSerial.read(25)
             if (not parser.ParseHeader(header)):
                 rospy.logwarn("Packet Failed: Unexpected header size")
                 continue
 
             # READ MESSAGE
-            msg = GPS.read(parser.hdr_msgLen)
+            msg = gpsSerial.read(parser.hdr_msgLen)
             if (len(msg) != parser.hdr_msgLen):
                 rospy.loginfo("Packet Failed: Message length unexpected")
                 continue
 
             # READ CRC
-            chk = GPS.read(4)
+            chk = gpsSerial.read(4)
             if (not parser.VerifyChecksum(sync+header+msg,chk)):
                 rospy.logwarn("Packet Failed: CRC Did not Match")
                 continue
@@ -263,4 +261,4 @@ if __name__ == "__main__":
                 rospy.logwarn("Novatel message ID not recognized. BESTPOS and BESTVEL supported only")
 
     except rospy.ROSInterruptException:
-        GPS.close() #Close GPS serial port
+        gpsSerial.close() #Close gpsSerial serial port
